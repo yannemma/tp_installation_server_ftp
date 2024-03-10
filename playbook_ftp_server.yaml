@@ -1,0 +1,64 @@
+- name: Installation et configuration de vsftpd sur Ubuntu 20.04 avec SSL/TLS
+  hosts: 192.168.43.141
+  become: yes  # Exécuter les tâches avec des privilèges élevés
+  vars:
+    ansible_become_pass: yann2024
+  tasks:
+    - name: Installation de vsftpd
+      apt:
+        name: vsftpd
+        state: present
+
+    - name: Création du répertoire FTP
+      file:
+        path: "/home/{{ ansible_user }}/ftp"
+        state: directory
+        owner: nobody
+        group: nogroup
+        mode: '0755'
+      become: yes
+
+    - name: Création du répertoire de téléchargement
+      file:
+        path: "/home/{{ ansible_user }}/ftp/upload"
+        state: directory
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: '0755'
+      become: yes
+
+    - name: Création du fichier demo.txt
+      copy:
+        content: "My FTP Server"
+        dest: "/home/{{ ansible_user }}/ftp/upload/demo.txt"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: '0644'
+      become: yes
+
+    - name: Génération du certificat SSL/TLS autosigné
+      command: >
+        openssl genrsa -out /etc/ssl/private/vsftpd.key 2048 &&
+        openssl req -new -x509 -key /etc/ssl/private/vsftpd.key -out /etc/ssl/private/vsftpd.pem -days 365 -subj "/CN=votre_domaine_ou_adresse_ip"
+      args:
+        creates: /etc/ssl/private/vsftpd.pem
+      become: yes
+
+    - name: Configuration de vsftpd avec SSL/TLS
+      template:
+        src: vsftpd.conf.j2
+        dest: /etc/vsftpd.conf
+      notify: restart vsftpd
+
+    - name: Ajout de l'utilisateur à vsftpd.userlist
+      lineinfile:
+        path: /etc/vsftpd.userlist
+        line: "{{ ansible_user }}"
+      become: yes
+
+  handlers:
+  - name: restart vsftpd
+    service:
+      name: vsftpd
+      state: restarted
+
